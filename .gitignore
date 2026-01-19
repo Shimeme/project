@@ -1,0 +1,21 @@
+
+# frontend
+node_modules/
+dist/
+.env
+.env.*
+
+# backend
+bin/
+tmp/
+air.toml
+.env
+.env.*
+
+# go
+*.exe
+*.test
+*.out
+
+# misc
+.DS_Store

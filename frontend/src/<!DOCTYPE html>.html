@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Pixel Art Website</title>
+<style>
+  body {
+    margin: 0;
+    font-family: monospace;
+    background: #222;
+    color: #fff;
+  }
+  #pixelCanvas {
+    position: fixed;
+    top: 0;
+    left: 0;
+    image-rendering: pixelated;
+    width: 100vw;
+    height: 100vh;
+    z-index: 9999;
+    pointer-events: none; /* allows interacting with page normally */
+  }
+  .content {
+    padding: 20px;
+  }
+  h1 { font-size: 2rem; }
+  p { font-size: 1rem; }
+</style>
+</head>
+<body>
+<div class="content">
+  <h1>PIXEL ART PAGE</h1>
+  <p>Everything, including text, looks pixelated now.</p>
+  <img src="https://i.imgur.com/1eQWbGf.png" width="64" height="64" alt="pixel sample">
+</div>
+<canvas id="pixelCanvas"></canvas>
+
+<script>
+const canvas = document.getElementById('pixelCanvas');
+const ctx = canvas.getContext('2d');
+
+function resizeCanvas() {
+  canvas.width = window.innerWidth / 8;  // low-res width
+  canvas.height = window.innerHeight / 8; // low-res height
+}
+resizeCanvas();
+window.addEventListener('resize', resizeCanvas);
+
+function renderPixelArt() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
+  ctx.scale(1,1);
+  ctx.drawImage(document.body, 0, 0, canvas.width, canvas.height);
+  requestAnimationFrame(renderPixelArt);
+}
+requestAnimationFrame(renderPixelArt);
+</script>
+</body>
+</html>
