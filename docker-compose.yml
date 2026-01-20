@@ -1,3 +1,4 @@
+
 version: '3.8'
 
 services:
@@ -34,7 +35,7 @@ services:
       - "8080:8080"
     restart: unless-stopped
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8080/health"]
+      test: ["CMD-SHELL", "curl -f http://localhost:8080/health || exit 1"]
       interval: 30s
       timeout: 10s
       retries: 3
@@ -42,3 +43,4 @@ services:
 
 volumes:
   postgres_data:
+

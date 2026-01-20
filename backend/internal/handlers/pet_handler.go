@@ -18,15 +18,33 @@ func NewPetHandler(petService services.PetService) *PetHandler {
 }
 
 func (h *PetHandler) FeedPet(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error": "FeedPet not implemented",
-	})
+	userID := parseUUID(c.GetString("userID"))
+
+	pet, err := h.petService.FeedPet(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error: "Feed failed",
+			Code:  "FEED_FAILED",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, pet)
 }
 
 func (h *PetHandler) PlayWithPet(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"error": "PlayWithPet not implemented",
-	})
+	userID := parseUUID(c.GetString("userID"))
+
+	pet, err := h.petService.PlayWithPet(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error: "Play failed",
+			Code:  "PLAY_FAILED",
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, pet)
 }
 
 // GetPet godoc

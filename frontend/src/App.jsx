@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { Scroll, Coins, Sparkles, Trash2, Check, Plus, Upload, PawPrint, LogOut } from 'lucide-react';
+import { Scroll, Coins, Sparkles, Trash2, Check, Plus, Upload, PawPrint, LogOut, Menu } from 'lucide-react';
 import Auth from './components/Auth';
 import { getTasks, createTask, completeTask as apiCompleteTask, deleteTask as apiDeleteTask, createBulkTasks } from './api/tasks';
 import { getPet, feedPet as apiFeedPet, playWithPet as apiPlayWithPet } from './api/pet';
@@ -146,41 +146,40 @@ const GuildQuest = () => {
     }
   };
 
-  
+  const completeTask = async (id) => {
+    const task = tasks.find(t => t.id === id);
+    if (!task || task.completed) return;
 
-const completeTask = async (id) => {
-  const task = tasks.find(t => t.id === id);
-  if (!task || task.completed) return;
+    try {
+      const response = await apiCompleteTask(id);
 
-  try {
-    const response = await apiCompleteTask(id);
+      // Update task in state
+      setTasks(prev =>
+        prev.map(t => (t.id === id ? response : t))
+      );
 
-    // Update task in state
-    setTasks(prev =>
-      prev.map(t => (t.id === id ? response : t))
-    );
+      // Refresh pet data
+      const petRes = await getPet();
+      setPet(petRes);
 
-    // Refresh pet data
-    const petRes = await getPet();
-    setPet(petRes);
+      // Update gold
+      const userData = JSON.parse(localStorage.getItem('guildquest_user'));
+      const newGold = userData.gold + task.reward;
+      setGold(newGold);
+      userData.gold = newGold;
+      localStorage.setItem('guildquest_user', JSON.stringify(userData));
 
-    // Update gold
-    const userData = JSON.parse(localStorage.getItem('guildquest_user'));
-    const newGold = userData.gold + task.reward;
-    setGold(newGold);
-    userData.gold = newGold;
-    localStorage.setItem('guildquest_user', JSON.stringify(userData));
-
-    if (petRes.level > pet.level) {
-      showGuildmasterComment('Quest complete! Your companion grows stronger!');
-    } else {
-      showGuildmasterComment('Well done, adventurer! Gold earned!');
+      if (petRes.level > pet.level) {
+        showGuildmasterComment('Quest complete! Your companion grows stronger!');
+      } else {
+        showGuildmasterComment('Well done, adventurer! Gold earned!');
+      }
+    } catch (err) {
+      console.error('Failed to complete task:', err);
+      showGuildmasterComment('Failed to complete quest!');
     }
-  } catch (err) {
-    console.error('Failed to complete task:', err);
-    showGuildmasterComment('Failed to complete quest!');
-  }
-};
+  };
+
   const deleteTask = async (id) => {
     try {
       await apiDeleteTask(id);
@@ -263,7 +262,8 @@ const completeTask = async (id) => {
 
   return (
     <div className="w-full min-h-screen relative font-serif bg-my-wood">
-      <nav className="relative z-10 bg-gradient-to-r from-[#6d4423] via-[#8B5A2B] to-[#6d4423] border-b-4 border-[#4a2e19] shadow-2xl">
+      {/* NAVBAR (Desktop) */}
+      <nav className="hidden md:block relative z-10 bg-gradient-to-r from-[#6d4423] via-[#8B5A2B] to-[#6d4423] border-b-4 border-[#4a2e19] shadow-2xl">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Scroll className="w-12 h-12 text-[#fdf6e3] drop-shadow-lg" strokeWidth={1.5} />
@@ -272,7 +272,7 @@ const completeTask = async (id) => {
             </h1>
           </div>
           <div className="flex items-center gap-6">
-            <div className="text-[#fdf6e3] text-sm hidden md:block">
+            <div className="text-[#fdf6e3] text-sm">
               <span className="opacity-75">Adventurer:</span>
               <span className="ml-2 font-bold">{user?.email?.split('@')[0]}</span>
             </div>
@@ -313,11 +313,42 @@ const completeTask = async (id) => {
         </div>
       </nav>
 
+      {/* MOBILE BOTTOM NAV */}
+      <nav className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-gradient-to-r from-[#6d4423] via-[#8B5A2B] to-[#6d4423] border-t-4 border-[#4a2e19] shadow-2xl">
+        <div className="flex items-center justify-between px-4 py-2">
+          <button
+            onClick={() => setCurrentPage('quests')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all ${
+              currentPage === 'quests' ? 'bg-[#8B5A2B] border-2 border-[#4a2e19]' : 'bg-transparent'
+            }`}
+          >
+            <Scroll className="w-6 h-6 text-[#fdf6e3]" strokeWidth={1.5} />
+            <span className="text-xs text-[#fdf6e3]">Quests</span>
+          </button>
+          <button
+            onClick={() => setCurrentPage('pet')}
+            className={`flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all ${
+              currentPage === 'pet' ? 'bg-[#8B5A2B] border-2 border-[#4a2e19]' : 'bg-transparent'
+            }`}
+          >
+            <PawPrint className="w-6 h-6 text-[#fdf6e3]" strokeWidth={1.5} />
+            <span className="text-xs text-[#fdf6e3]">Pet</span>
+          </button>
+          <button
+            onClick={handleLogout}
+            className="flex-1 flex flex-col items-center gap-1 py-2 rounded-lg transition-all bg-red-800 border-2 border-red-950"
+          >
+            <LogOut className="w-6 h-6 text-[#fdf6e3]" strokeWidth={1.5} />
+            <span className="text-xs text-[#fdf6e3]">Logout</span>
+          </button>
+        </div>
+      </nav>
+
       {showGuildmaster && (
-        <div className="fixed top-24 right-8 z-50 bg-[#fdf6e3] bg-paper-texture border-4 border-[#8B5A2B] rounded-lg shadow-2xl p-5 animate-bounce">
+        <div className="fixed top-24 right-4 md:right-8 z-50 bg-[#fdf6e3] bg-paper-texture border-4 border-[#8B5A2B] rounded-lg shadow-2xl p-4 md:p-5 animate-bounce">
           <div className="flex items-start gap-3">
-            <div className="w-12 h-12 bg-gradient-to-br from-[#8B5A2B] to-[#6d4423] rounded-full flex items-center justify-center text-2xl border-2 border-[#4a2e19] shadow-inner">
-              ðŸ§™
+            <div className="w-10 h-10 bg-gradient-to-br from-[#8B5A2B] to-[#6d4423] rounded-full flex items-center justify-center text-2xl border-2 border-[#4a2e19] shadow-inner">
+              🧙‍♂️
             </div>
             <div>
               <p className="text-xs font-bold mb-1 text-[#6d4423] uppercase tracking-wider">
@@ -331,7 +362,7 @@ const completeTask = async (id) => {
         </div>
       )}
 
-      <div className="relative z-10 max-w-7xl mx-auto px-6 py-8 pb-16">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 md:px-6 py-8 pb-24 md:pb-16">
         {currentPage === 'quests' ? (
           <QuestBoard
             tasks={tasks}
@@ -365,14 +396,14 @@ const QuestBoard = ({ tasks, newTask, setNewTask, bulkTaskText, setBulkTaskText,
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <div className="lg:col-span-1">
-        <div className="bg-[#fdf6e3] bg-paper-texture rounded-lg shadow-2xl border-4 border-[#8B5A2B] relative p-8 shadow-inner">
-          <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-red-700 to-red-900 rounded-full shadow-xl border-2 border-red-950 flex items-center justify-center text-2xl text-white">ðŸ“Œ</div>
+        <div className="bg-[#fdf6e3] bg-paper-texture rounded-lg shadow-2xl border-4 border-[#8B5A2B] relative p-6 md:p-8 shadow-inner">
+          <div className="absolute -top-4 -left-4 w-10 h-10 bg-gradient-to-br from-red-700 to-red-900 rounded-full shadow-xl border-2 border-red-950 flex items-center justify-center text-2xl text-white">📜</div>
           
-          <h2 className="text-3xl font-bold mb-6 pb-3 text-[#4a2e19] border-b-2 border-[#8B5A2B]">
+          <h2 className="text-2xl md:text-3xl font-bold mb-6 pb-3 text-[#4a2e19] border-b-2 border-[#8B5A2B]">
             Post New Quest
           </h2>
           
-          <div className="space-y-5">
+          <div className="space-y-4 md:space-y-5">
             <div>
               <label className="block text-sm font-bold mb-2 text-[#6d4423]">
                 Quest Title
@@ -451,9 +482,9 @@ const QuestBoard = ({ tasks, newTask, setNewTask, bulkTaskText, setBulkTaskText,
       </div>
 
       <div className="lg:col-span-2">
-        <div className="bg-[#fdf6e3] bg-paper-texture rounded-lg shadow-2xl border-4 border-[#8B5A2B] p-8 shadow-inner">
-          <h2 className="text-4xl font-bold mb-8 pb-4 text-[#4a2e19] border-b-2 border-[#8B5A2B] flex items-center gap-4">
-            <Scroll className="w-10 h-10" strokeWidth={1.5} />
+        <div className="bg-[#fdf6e3] bg-paper-texture rounded-lg shadow-2xl border-4 border-[#8B5A2B] p-6 md:p-8 shadow-inner">
+          <h2 className="text-3xl md:text-4xl font-bold mb-6 md:mb-8 pb-4 text-[#4a2e19] border-b-2 border-[#8B5A2B] flex items-center gap-4">
+            <Scroll className="w-8 h-8 md:w-10 md:h-10" strokeWidth={1.5} />
             Active Quests
           </h2>
           
@@ -507,7 +538,7 @@ const QuestBoard = ({ tasks, newTask, setNewTask, bulkTaskText, setBulkTaskText,
                             </div>
                             {task.completed && (
                               <span className="text-xs font-bold px-3 py-1 bg-gradient-to-br from-green-600 to-green-800 text-green-50 rounded-lg border border-green-900 shadow-md">
-                                âœ“ COMPLETED
+                                ✓ COMPLETED
                               </span>
                             )}
                           </div>
@@ -542,30 +573,30 @@ const PetChamber = ({ pet, decorations, gold, feedPet, playWithPet, buyDecoratio
           <div className="absolute inset-4 border-4 border-amber-700 opacity-30 rounded pointer-events-none"></div>
 
           <div className="absolute top-6 left-6 flex gap-3 z-10">
-            {decorations.includes('torch') && <span className="text-5xl drop-shadow-2xl">ðŸ”¥</span>}
-            {decorations.includes('banner') && <span className="text-5xl drop-shadow-2xl">ðŸš©</span>}
+            {decorations.includes('torch') && <span className="text-5xl drop-shadow-2xl">🔥</span>}
+            {decorations.includes('banner') && <span className="text-5xl drop-shadow-2xl">🏰</span>}
           </div>
           <div className="absolute top-6 right-6 flex gap-3 z-10">
-            {decorations.includes('shield') && <span className="text-5xl drop-shadow-2xl">ðŸ›¡ï¸</span>}
-            {decorations.includes('armor') && <span className="text-5xl drop-shadow-2xl">âš”ï¸</span>}
+            {decorations.includes('shield') && <span className="text-5xl drop-shadow-2xl">🛡️</span>}
+            {decorations.includes('armor') && <span className="text-5xl drop-shadow-2xl">⚔️</span>}
           </div>
           <div className="absolute bottom-6 left-6 flex gap-3 z-10">
-            {decorations.includes('chest') && <span className="text-5xl drop-shadow-2xl">ðŸ“¦</span>}
-            {decorations.includes('bookshelf') && <span className="text-5xl drop-shadow-2xl">ðŸ“š</span>}
+            {decorations.includes('chest') && <span className="text-5xl drop-shadow-2xl">🧰</span>}
+            {decorations.includes('bookshelf') && <span className="text-5xl drop-shadow-2xl">📚</span>}
           </div>
 
           <div className="absolute inset-0 flex items-center justify-center z-20">
             <div className="text-center">
-              <div className="text-9xl mb-6 animate-bounce drop-shadow-2xl">ðŸ‰</div>
-              <div className="inline-block px-8 py-4 bg-[#fdf6e3] bg-paper-texture rounded-lg shadow-2xl border-4 border-[#8B5A2B]">
-                <h2 className="text-3xl font-bold mb-3 text-[#4a2e19]">
+              <div className="text-8xl md:text-9xl mb-6 animate-bounce drop-shadow-2xl">🐉</div>
+              <div className="inline-block px-6 md:px-8 py-4 bg-[#fdf6e3] bg-paper-texture rounded-lg shadow-2xl border-4 border-[#8B5A2B]">
+                <h2 className="text-2xl md:text-3xl font-bold mb-3 text-[#4a2e19]">
                   Level {pet.level} {pet.type.charAt(0).toUpperCase() + pet.type.slice(1)}
                 </h2>
                 <div className="flex items-center gap-3">
                   <span className="text-sm font-bold text-[#6d4423]">
                     Experience
                   </span>
-                  <div className="w-40 h-4 bg-[#6d4423] rounded-full overflow-hidden shadow-inner border-2 border-[#4a2e19]">
+                  <div className="w-36 md:w-40 h-4 bg-[#6d4423] rounded-full overflow-hidden shadow-inner border-2 border-[#4a2e19]">
                     <div
                       className="h-full bg-gradient-to-r from-yellow-400 via-yellow-300 to-yellow-400 transition-all shadow-lg"
                       style={{ width: `${(pet.exp / (pet.level * 100)) * 100}%` }}
@@ -577,7 +608,7 @@ const PetChamber = ({ pet, decorations, gold, feedPet, playWithPet, buyDecoratio
           </div>
         </div>
 
-        <div className="mt-6 grid grid-cols-2 gap-6">
+        <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
           <button
             onClick={feedPet}
             className="bg-gradient-to-br from-green-600 to-green-800 text-green-50 py-5 rounded-lg font-bold shadow-xl hover:from-green-500 hover:to-green-700 transition-all border-2 border-green-900 text-lg"
@@ -666,7 +697,7 @@ const PetChamber = ({ pet, decorations, gold, feedPet, playWithPet, buyDecoratio
                   <span className="capitalize text-lg">{deco}</span>
                   <span className="flex items-center gap-1 font-bold">
                     {decorations.includes(deco) ? (
-                      <span className="text-sm">âœ“ Owned</span>
+                      <span className="text-sm">✓ Owned</span>
                     ) : (
                       <>
                         <span>50</span>
