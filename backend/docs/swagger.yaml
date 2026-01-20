@@ -1,4 +1,3 @@
-basePath: /api/v1
 definitions:
   models.AuthResponse:
     properties:
@@ -136,19 +135,8 @@ definitions:
       updatedAt:
         type: string
     type: object
-host: localhost:8080
 info:
-  contact:
-    email: support@guildquest.io
-    name: API Support
-    url: https://guildquest.io/support
-  description: Production-ready gamified task management system with virtual pet
-  license:
-    name: MIT
-    url: https://opensource.org/licenses/MIT
-  termsOfService: https://guildquest.io/terms
-  title: GuildQuest API
-  version: "1.0"
+  contact: {}
 paths:
   /auth/login:
     post:
@@ -363,10 +351,4 @@ paths:
       summary: Create task
       tags:
       - tasks
-securityDefinitions:
-  BearerAuth:
-    description: Type "Bearer" followed by a space and JWT token
-    in: header
-    name: Authorization
-    type: apiKey
 swagger: "2.0"
