@@ -1,13 +1,4 @@
 definitions:
-  models.AuthResponse:
-    properties:
-      accessToken:
-        type: string
-      refreshToken:
-        type: string
-      user:
-        $ref: '#/definitions/models.User'
-    type: object
   models.BuyDecorationRequest:
     properties:
       decoration:
@@ -43,16 +34,6 @@ definitions:
       error:
         type: string
     type: object
-  models.LoginRequest:
-    properties:
-      email:
-        type: string
-      password:
-        type: string
-    required:
-    - email
-    - password
-    type: object
   models.Pet:
     properties:
       exp:
@@ -69,17 +50,6 @@ definitions:
         type: string
       userId:
         type: string
-    type: object
-  models.RegisterRequest:
-    properties:
-      email:
-        type: string
-      password:
-        minLength: 8
-        type: string
-    required:
-    - email
-    - password
     type: object
   models.SyncRequest:
     properties:
@@ -138,56 +108,6 @@ definitions:
 info:
   contact: {}
 paths:
-  /auth/login:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Login credentials
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.LoginRequest'
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.AuthResponse'
-        "401":
-          description: Unauthorized
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-      summary: Login user
-      tags:
-      - auth
-  /auth/register:
-    post:
-      consumes:
-      - application/json
-      parameters:
-      - description: Registration details
-        in: body
-        name: request
-        required: true
-        schema:
-          $ref: '#/definitions/models.RegisterRequest'
-      produces:
-      - application/json
-      responses:
-        "201":
-          description: Created
-          schema:
-            $ref: '#/definitions/models.AuthResponse'
-        "400":
-          description: Bad Request
-          schema:
-            $ref: '#/definitions/models.ErrorResponse'
-      summary: Register a new user
-      tags:
-      - auth
   /decorations:
     get:
       description: Get all decorations owned by user
@@ -257,20 +177,6 @@ paths:
       summary: Get invite QR
       tags:
       - invite
-  /me:
-    get:
-      produces:
-      - application/json
-      responses:
-        "200":
-          description: OK
-          schema:
-            $ref: '#/definitions/models.User'
-      security:
-      - BearerAuth: []
-      summary: Get current user
-      tags:
-      - auth
   /pet:
     get:
       produces:

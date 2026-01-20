@@ -1,6 +1,7 @@
 package middleware
 
 import (
+	"log"
 	"net/http"
 	"strings"
 
@@ -13,6 +14,7 @@ import (
 func AuthMiddleware(authService services.AuthService) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
+		log.Println("AUTH MIDDLEWARE HIT")
 		if authHeader == "" {
 			c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 				Error: "Authorization header required",
@@ -43,7 +45,9 @@ func AuthMiddleware(authService services.AuthService) gin.HandlerFunc {
 			return
 		}
 
+		// ВАЖНО: ключ
 		c.Set("userID", userID.String())
+
 		c.Next()
 	}
 }

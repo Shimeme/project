@@ -7,11 +7,8 @@ import (
 
 	"guildquest/internal/config"
 	"guildquest/internal/database"
-	"guildquest/internal/handlers"
 	"guildquest/internal/middleware"
-	"guildquest/internal/repositories"
 	"guildquest/internal/routes"
-	"guildquest/internal/services"
 
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -32,28 +29,7 @@ func main() {
 		log.Fatalf("DB migration failed: %v", err)
 	}
 
-	// Repos
-	userRepo := repositories.NewUserRepository(db)
-	taskRepo := repositories.NewTaskRepository(db)
-	petRepo := repositories.NewPetRepository(db)
-	decorationRepo := repositories.NewDecorationRepository(db)
-
-	// Services
-	authService := services.NewAuthService(userRepo, cfg.JWTSecret)
-	taskService := services.NewTaskService(taskRepo, petRepo, userRepo)
-	petService := services.NewPetService(petRepo, userRepo)
-	decorationService := services.NewDecorationService(decorationRepo, userRepo)
-	syncService := services.NewSyncService(taskRepo, petRepo, decorationRepo)
-	inviteService := services.NewInviteService(cfg.JWTSecret, cfg.AppURL)
-
 	// Handlers
-	authHandler := handlers.NewAuthHandler(authService)
-	taskHandler := handlers.NewTaskHandler(taskService)
-	petHandler := handlers.NewPetHandler(petService)
-	decorationHandler := handlers.NewDecorationHandler(decorationService)
-	syncHandler := handlers.NewSyncHandler(syncService)
-	inviteHandler := handlers.NewInviteHandler(inviteService)
-
 	if cfg.Environment == "production" {
 		gin.SetMode(gin.ReleaseMode)
 	}
@@ -91,17 +67,7 @@ func main() {
 		c.JSON(200, gin.H{"status": "ok"})
 	})
 
-	routes.SetupRoutes(
-		api,
-		authHandler,
-		taskHandler,
-		petHandler,
-		decorationHandler,
-		syncHandler,
-		inviteHandler,
-		cfg.JWTSecret,
-	)
-
+	routes.SetupRoutesWithAuth(api, db, cfg.JWTSecret)
 	// Start
 	port := os.Getenv("PORT")
 	if port == "" {

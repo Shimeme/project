@@ -18,11 +18,21 @@ type AuthService interface {
 	Login(email, password string) (*models.AuthResponse, error)
 	ValidateToken(tokenString string) (uuid.UUID, error)
 	GenerateTokens(userID uuid.UUID) (string, string, error)
-}
 
+	GetUserByID(userID string) (*models.User, error)
+}
 type authService struct {
 	userRepo  repositories.UserRepository
 	jwtSecret string
+}
+
+func (s *authService) GetUserByID(userID string) (*models.User, error) {
+	id, err := uuid.Parse(userID)
+	if err != nil {
+		return nil, err
+	}
+
+	return s.userRepo.FindByID(id)
 }
 
 func NewAuthService(userRepo repositories.UserRepository, jwtSecret string) AuthService {

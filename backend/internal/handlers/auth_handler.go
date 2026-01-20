@@ -14,18 +14,12 @@ type AuthHandler struct {
 }
 
 func NewAuthHandler(authService services.AuthService) *AuthHandler {
-	return &AuthHandler{authService: authService}
+	return &AuthHandler{
+		authService: authService,
+	}
 }
 
-// Register godoc
-// @Summary Register a new user
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body models.RegisterRequest true "Registration details"
-// @Success 201 {object} models.AuthResponse
-// @Failure 400 {object} models.ErrorResponse
-// @Router /auth/register [post]
+// Register
 func (h *AuthHandler) Register(c *gin.Context) {
 	var req models.RegisterRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -54,15 +48,7 @@ func (h *AuthHandler) Register(c *gin.Context) {
 	})
 }
 
-// Login godoc
-// @Summary Login user
-// @Tags auth
-// @Accept json
-// @Produce json
-// @Param request body models.LoginRequest true "Login credentials"
-// @Success 200 {object} models.AuthResponse
-// @Failure 401 {object} models.ErrorResponse
-// @Router /auth/login [post]
+// Login
 func (h *AuthHandler) Login(c *gin.Context) {
 	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -85,19 +71,22 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	c.JSON(http.StatusOK, resp)
 }
 
-// GetMe godoc
-// @Summary Get current user
-// @Tags auth
-// @Produce json
-// @Security BearerAuth
-// @Success 200 {object} models.User
-// @Router /me [get]
+// GetMe
 func (h *AuthHandler) GetMe(c *gin.Context) {
-	user, ok := c.Get("user")
-	if !ok {
+	userID := c.GetString("userID")
+	if userID == "" {
 		c.JSON(http.StatusUnauthorized, models.ErrorResponse{
 			Error: "Unauthorized",
 			Code:  "UNAUTHORIZED",
+		})
+		return
+	}
+
+	user, err := h.authService.GetUserByID(userID)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, models.ErrorResponse{
+			Error: "User not found",
+			Code:  "USER_NOT_FOUND",
 		})
 		return
 	}
