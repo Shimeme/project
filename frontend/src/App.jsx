@@ -1,8 +1,14 @@
-import React, { useState, useEffect } from 'react';
-import { Scroll, Coins, Sparkles, Trash2, Check, Plus, Upload, PawPrint } from 'lucide-react';
 
+import React, { useState, useEffect } from 'react';
+import { Scroll, Coins, Sparkles, Trash2, Check, Plus, Upload, PawPrint, LogOut } from 'lucide-react';
+import Auth from './components/Auth';
+import { getTasks, createTask, completeTask as apiCompleteTask, deleteTask as apiDeleteTask, createBulkTasks } from './api/tasks';
+import { getPet, feedPet as apiFeedPet, playWithPet as apiPlayWithPet } from './api/pet';
+import { getDecorations, buyDecoration as apiBuyDecoration } from './api/decorations';
 
 const GuildQuest = () => {
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [user, setUser] = useState(null);
   const [currentPage, setCurrentPage] = useState('quests');
   const [tasks, setTasks] = useState([]);
   const [gold, setGold] = useState(0);
@@ -19,59 +25,48 @@ const GuildQuest = () => {
   const [showGuildmaster, setShowGuildmaster] = useState(false);
   const [guildmasterMessage, setGuildmasterMessage] = useState('');
 
-  
-useEffect(() => {
-  const loadData = async () => {
-    try {
-      // Пытаемся загрузить с бэка
-      const [tasksRes, petRes] = await Promise.all([getTasks(), getPet()]);
-      setTasks(tasksRes.data || []);
-      setPet(petRes.data || pet);
-      setGold(petRes.data?.gold || 0);
-      setDecorations(petRes.data?.decorations || []);
-    } catch (err) {
-      console.warn('Backend unavailable, loading from localStorage', err);
-      // fallback на localStorage
-      const savedData = localStorage.getItem('guildquest_data');
-      if (savedData) {
-        const data = JSON.parse(savedData);
-        setTasks(data.tasks || []);
-        setGold(data.gold || 0);
-        setPet(data.pet || pet);
-        setDecorations(data.decorations || []);
-      }
-    }
-  };
-
-  loadData();
-}, []);
- 
-useEffect(() => {
-  const saveData = async () => {
-    const data = { tasks, gold, pet, decorations };
-    
-    // 1️⃣ Сохраняем локально
-    localStorage.setItem('guildquest_data', JSON.stringify(data));
-
-    // 2️⃣ Пытаемся синхронизировать с бэком
-    try {
-      // Синхронизация задач
-      await Promise.all(tasks.map(task => 
-        task.id < 0 
-          ? createTask(task)        // новые задачи
-          : apiCompleteTask(task)   // или апдейт существующих
-      ));
-
-      // Синхронизация питомца
-      await apiFeedPet(pet); // или другой эндпоинт updatePet
-    } catch (err) {
-      console.warn('Failed to sync with backend', err);
-    }
-  };
-
-  saveData();
-}, [tasks, gold, pet, decorations]);
+  // Check authentication on mount
   useEffect(() => {
+    const token = localStorage.getItem('guildquest_token');
+    const savedUser = localStorage.getItem('guildquest_user');
+    
+    if (token && savedUser) {
+      setUser(JSON.parse(savedUser));
+      setIsAuthenticated(true);
+    }
+  }, []);
+
+  // Load data from backend when authenticated
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
+    const loadData = async () => {
+      try {
+        const [tasksRes, petRes, decorationsRes] = await Promise.all([
+          getTasks(),
+          getPet(),
+          getDecorations()
+        ]);
+
+        setTasks(tasksRes || []);
+        setPet(petRes || pet);
+        setDecorations(decorationsRes || []);
+        
+        const savedUser = JSON.parse(localStorage.getItem('guildquest_user'));
+        setGold(savedUser?.gold || 0);
+      } catch (err) {
+        console.error('Failed to load data from backend:', err);
+        showGuildmasterComment('Failed to connect to the Guild Hall!');
+      }
+    };
+
+    loadData();
+  }, [isAuthenticated]);
+
+  // Pet hunger/happiness decay
+  useEffect(() => {
+    if (!isAuthenticated) return;
+
     const interval = setInterval(() => {
       setPet(prev => ({
         ...prev,
@@ -80,7 +75,26 @@ useEffect(() => {
       }));
     }, 60000);
     return () => clearInterval(interval);
-  }, []);
+  }, [isAuthenticated]);
+
+  const handleAuthSuccess = (userData) => {
+    setUser(userData);
+    setGold(userData.gold);
+    setIsAuthenticated(true);
+    showGuildmasterComment(`Welcome, ${userData.email.split('@')[0]}!`);
+  };
+
+  const handleLogout = () => {
+    localStorage.removeItem('guildquest_token');
+    localStorage.removeItem('guildquest_refresh_token');
+    localStorage.removeItem('guildquest_user');
+    setIsAuthenticated(false);
+    setUser(null);
+    setTasks([]);
+    setGold(0);
+    setPet({ type: 'dragon', level: 1, hunger: 100, happiness: 100, exp: 0 });
+    setDecorations([]);
+  };
 
   const showGuildmasterComment = (message) => {
     setGuildmasterMessage(message);
@@ -88,111 +102,167 @@ useEffect(() => {
     setTimeout(() => setShowGuildmaster(false), 3000);
   };
 
-  const addTask = () => {
+  const addTask = async () => {
     if (!newTask.title.trim()) return;
-    const task = {
-      id: Date.now(),
-      ...newTask,
-      completed: false,
-      createdAt: new Date().toISOString()
-    };
-    setTasks([...tasks, task]);
-    setNewTask({ title: '', description: '', reward: 10 });
-    showGuildmasterComment('A new quest has been posted!');
+    
+    try {
+      const response = await createTask({
+        title: newTask.title,
+        description: newTask.description,
+        reward: newTask.reward
+      });
+      
+      setTasks([...tasks, response]);
+      setNewTask({ title: '', description: '', reward: 10 });
+      showGuildmasterComment('A new quest has been posted!');
+    } catch (err) {
+      console.error('Failed to create task:', err);
+      showGuildmasterComment('Failed to post quest!');
+    }
   };
 
-  const addBulkTasks = () => {
+  const addBulkTasks = async () => {
     if (!bulkTaskText.trim()) return;
+    
     const lines = bulkTaskText.split('\n').filter(line => line.trim());
-    const newTasks = lines.map((line, index) => {
+    const taskList = lines.map(line => {
       const match = line.match(/^\d+\.\s*(.+)/);
       const title = match ? match[1] : line;
       return {
-        id: Date.now() + index,
         title: title.trim(),
         description: '',
-        reward: 10,
-        completed: false,
-        createdAt: new Date().toISOString()
+        reward: 10
       };
     });
-    setTasks([...tasks, ...newTasks]);
-    setBulkTaskText('');
-    showGuildmasterComment(`${newTasks.length} quests added to the board!`);
+
+    try {
+      const response = await createBulkTasks(taskList);
+      setTasks([...tasks, ...response]);
+      setBulkTaskText('');
+      showGuildmasterComment(`${response.length} quests added to the board!`);
+    } catch (err) {
+      console.error('Failed to create bulk tasks:', err);
+      showGuildmasterComment('Failed to add quests!');
+    }
   };
 
-  const completeTask = (id) => {
-    const task = tasks.find(t => t.id === id);
-    if (!task || task.completed) return;
-    
-    setTasks(tasks.map(t => t.id === id ? { ...t, completed: true } : t));
-    setGold(gold + task.reward);
-    
-    setPet(prev => ({
-      ...prev,
-      happiness: Math.min(100, prev.happiness + 5),
-      exp: prev.exp + 10
-    }));
+  
 
-    if (pet.exp + 10 >= pet.level * 100) {
-      setPet(prev => ({
-        ...prev,
-        level: prev.level + 1,
-        exp: 0
-      }));
+const completeTask = async (id) => {
+  const task = tasks.find(t => t.id === id);
+  if (!task || task.completed) return;
+
+  try {
+    const response = await apiCompleteTask(id);
+
+    // Update task in state
+    setTasks(prev =>
+      prev.map(t => (t.id === id ? response : t))
+    );
+
+    // Refresh pet data
+    const petRes = await getPet();
+    setPet(petRes);
+
+    // Update gold
+    const userData = JSON.parse(localStorage.getItem('guildquest_user'));
+    const newGold = userData.gold + task.reward;
+    setGold(newGold);
+    userData.gold = newGold;
+    localStorage.setItem('guildquest_user', JSON.stringify(userData));
+
+    if (petRes.level > pet.level) {
       showGuildmasterComment('Quest complete! Your companion grows stronger!');
     } else {
       showGuildmasterComment('Well done, adventurer! Gold earned!');
     }
+  } catch (err) {
+    console.error('Failed to complete task:', err);
+    showGuildmasterComment('Failed to complete quest!');
+  }
+};
+  const deleteTask = async (id) => {
+    try {
+      await apiDeleteTask(id);
+      setTasks(tasks.filter(t => t.id !== id));
+      showGuildmasterComment('Quest removed from board!');
+    } catch (err) {
+      console.error('Failed to delete task:', err);
+      showGuildmasterComment('Failed to remove quest!');
+    }
   };
 
-  const deleteTask = (id) => {
-    setTasks(tasks.filter(t => t.id !== id));
-  };
-
-  const feedPet = () => {
+  const feedPet = async () => {
     const cost = 20;
     if (gold < cost) {
       showGuildmasterComment('Not enough gold, adventurer!');
       return;
     }
-    setGold(gold - cost);
-    setPet(prev => ({
-      ...prev,
-      hunger: Math.min(100, prev.hunger + 30),
-      happiness: Math.min(100, prev.happiness + 10)
-    }));
-    showGuildmasterComment('Your companion is well fed!');
+
+    try {
+      const response = await apiFeedPet();
+      setPet(response);
+      
+      const newGold = gold - cost;
+      setGold(newGold);
+      
+      const userData = JSON.parse(localStorage.getItem('guildquest_user'));
+      userData.gold = newGold;
+      localStorage.setItem('guildquest_user', JSON.stringify(userData));
+      
+      showGuildmasterComment('Your companion is well fed!');
+    } catch (err) {
+      console.error('Failed to feed pet:', err);
+      showGuildmasterComment(err.response?.error || 'Failed to feed pet!');
+    }
   };
 
-  const playWithPet = () => {
-    setPet(prev => ({
-      ...prev,
-      happiness: Math.min(100, prev.happiness + 20),
-      hunger: Math.max(0, prev.hunger - 5)
-    }));
-    showGuildmasterComment('Your companion enjoyed that!');
+  const playWithPet = async () => {
+    try {
+      const response = await apiPlayWithPet();
+      setPet(response);
+      showGuildmasterComment('Your companion enjoyed that!');
+    } catch (err) {
+      console.error('Failed to play with pet:', err);
+      showGuildmasterComment('Failed to play with pet!');
+    }
   };
 
-  const buyDecoration = (decoration) => {
+  const buyDecoration = async (decoration) => {
     const cost = 50;
     if (gold < cost) {
       showGuildmasterComment('Not enough gold for decorations!');
       return;
     }
-    if (decorations.includes(decoration)) {
+    if (decorations.some(d => d.decoration === decoration)) {
       showGuildmasterComment('You already own this decoration!');
       return;
     }
-    setGold(gold - cost);
-    setDecorations([...decorations, decoration]);
-    showGuildmasterComment('Chamber decorated beautifully!');
+
+    try {
+      await apiBuyDecoration(decoration);
+      
+      const newGold = gold - cost;
+      setGold(newGold);
+      setDecorations([...decorations, { decoration }]);
+      
+      const userData = JSON.parse(localStorage.getItem('guildquest_user'));
+      userData.gold = newGold;
+      localStorage.setItem('guildquest_user', JSON.stringify(userData));
+      
+      showGuildmasterComment('Chamber decorated beautifully!');
+    } catch (err) {
+      console.error('Failed to buy decoration:', err);
+      showGuildmasterComment(err.respons?.error || 'Failed to purchase decoration!');
+    }
   };
 
+  if (!isAuthenticated) {
+    return <Auth onAuthSuccess={handleAuthSuccess} />;
+  }
+
   return (
-    // --- USE THE NEW TAILWIND CLASS INSTEAD OF INLINE STYLE ---
     <div className="w-full min-h-screen relative font-serif bg-my-wood">
-      {/* Wooden Header */}
       <nav className="relative z-10 bg-gradient-to-r from-[#6d4423] via-[#8B5A2B] to-[#6d4423] border-b-4 border-[#4a2e19] shadow-2xl">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center gap-4">
@@ -202,6 +272,10 @@ useEffect(() => {
             </h1>
           </div>
           <div className="flex items-center gap-6">
+            <div className="text-[#fdf6e3] text-sm hidden md:block">
+              <span className="opacity-75">Adventurer:</span>
+              <span className="ml-2 font-bold">{user?.email?.split('@')[0]}</span>
+            </div>
             <div className="relative px-6 py-3 bg-gradient-to-br from-yellow-400 via-yellow-500 to-yellow-600 rounded-lg shadow-xl border-2 border-yellow-700">
               <Coins className="w-6 h-6 text-yellow-900 inline mr-2" strokeWidth={2} />
               <span className="text-2xl font-bold text-yellow-950">{gold}</span>
@@ -228,16 +302,22 @@ useEffect(() => {
               <PawPrint className="w-5 h-5 inline mr-2" strokeWidth={1.5} />
               Pet Chamber
             </button>
+            <button
+              onClick={handleLogout}
+              className="px-5 py-3 rounded-lg font-semibold shadow-lg transition-all border-2 bg-red-800 border-red-950 text-[#fdf6e3] hover:bg-red-700"
+              title="Logout"
+            >
+              <LogOut className="w-5 h-5" strokeWidth={1.5} />
+            </button>
           </div>
         </div>
       </nav>
 
-      {/* Guildmaster Message on Parchment */}
       {showGuildmaster && (
         <div className="fixed top-24 right-8 z-50 bg-[#fdf6e3] bg-paper-texture border-4 border-[#8B5A2B] rounded-lg shadow-2xl p-5 animate-bounce">
           <div className="flex items-start gap-3">
             <div className="w-12 h-12 bg-gradient-to-br from-[#8B5A2B] to-[#6d4423] rounded-full flex items-center justify-center text-2xl border-2 border-[#4a2e19] shadow-inner">
-              🧙
+              ðŸ§™
             </div>
             <div>
               <p className="text-xs font-bold mb-1 text-[#6d4423] uppercase tracking-wider">
@@ -267,7 +347,7 @@ useEffect(() => {
         ) : (
           <PetChamber
             pet={pet}
-            decorations={decorations}
+            decorations={decorations.map(d => d.decoration || d)}
             gold={gold}
             feedPet={feedPet}
             playWithPet={playWithPet}
@@ -278,17 +358,15 @@ useEffect(() => {
     </div>
   );
 };
-// ... The rest of the file (QuestBoard, PetChamber) remains the same
-// (Make sure to include the rest of your components here)
+
 const QuestBoard = ({ tasks, newTask, setNewTask, bulkTaskText, setBulkTaskText, addTask, addBulkTasks, completeTask, deleteTask }) => {
   const [showBulkInput, setShowBulkInput] = useState(false);
 
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-      {/* "Post New Quest" Parchment */}
       <div className="lg:col-span-1">
         <div className="bg-[#fdf6e3] bg-paper-texture rounded-lg shadow-2xl border-4 border-[#8B5A2B] relative p-8 shadow-inner">
-          <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-red-700 to-red-900 rounded-full shadow-xl border-2 border-red-950 flex items-center justify-center text-2xl text-white">📌</div>
+          <div className="absolute -top-4 -left-4 w-12 h-12 bg-gradient-to-br from-red-700 to-red-900 rounded-full shadow-xl border-2 border-red-950 flex items-center justify-center text-2xl text-white">ðŸ“Œ</div>
           
           <h2 className="text-3xl font-bold mb-6 pb-3 text-[#4a2e19] border-b-2 border-[#8B5A2B]">
             Post New Quest
@@ -333,7 +411,6 @@ const QuestBoard = ({ tasks, newTask, setNewTask, bulkTaskText, setBulkTaskText,
               />
             </div>
             
-            {/* Wax Seal Button */}
             <button
               onClick={addTask}
               className="w-full bg-gradient-to-br from-red-700 to-red-900 text-yellow-50 py-4 rounded-lg font-bold shadow-xl hover:from-red-600 hover:to-red-800 transition-all border-2 border-red-950"
@@ -359,7 +436,7 @@ const QuestBoard = ({ tasks, newTask, setNewTask, bulkTaskText, setBulkTaskText,
                   value={bulkTaskText}
                   onChange={(e) => setBulkTaskText(e.target.value)}
                   className="w-full px-4 py-3 bg-[#fffbf2] bg-paper-texture border-2 border-[#b9956f] rounded-lg shadow-inner focus:outline-none focus:ring-2 focus:ring-[#8B5A2B] h-32 resize-none text-[#4a2e19]"
-                  placeholder="1. First quest"
+                  placeholder="1. First quest&#10;2. Second quest&#10;3. Third quest"
                 />
                 <button
                   onClick={addBulkTasks}
@@ -373,7 +450,6 @@ const QuestBoard = ({ tasks, newTask, setNewTask, bulkTaskText, setBulkTaskText,
         </div>
       </div>
 
-      {/* "Active Quests" Main Parchment */}
       <div className="lg:col-span-2">
         <div className="bg-[#fdf6e3] bg-paper-texture rounded-lg shadow-2xl border-4 border-[#8B5A2B] p-8 shadow-inner">
           <h2 className="text-4xl font-bold mb-8 pb-4 text-[#4a2e19] border-b-2 border-[#8B5A2B] flex items-center gap-4">
@@ -431,7 +507,7 @@ const QuestBoard = ({ tasks, newTask, setNewTask, bulkTaskText, setBulkTaskText,
                             </div>
                             {task.completed && (
                               <span className="text-xs font-bold px-3 py-1 bg-gradient-to-br from-green-600 to-green-800 text-green-50 rounded-lg border border-green-900 shadow-md">
-                                ✓ COMPLETED
+                                âœ“ COMPLETED
                               </span>
                             )}
                           </div>
@@ -462,26 +538,25 @@ const PetChamber = ({ pet, decorations, gold, feedPet, playWithPet, buyDecoratio
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
       <div className="lg:col-span-2">
         <div className="bg-gradient-to-br from-stone-800 to-stone-900 rounded-lg shadow-2xl border-4 border-[#4a2e19] relative min-h-[500px] overflow-hidden">
-          {/* Stone wall texture */}
           <div className="absolute inset-0 opacity-10 pointer-events-none bg-[url('data:image/svg+xml,%3Csvg%20width%3D%2240%22%20height%3D%2240%22%20viewBox%3D%220%200%2040%2040%22%20xmlns%3D%22http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%22%3E%3Cg%20fill%3D%22%23ffffff%22%20fill-opacity%3D%220.1%22%20fill-rule%3D%22evenodd%22%3E%3Cpath%20d%3D%22M0%2040L40%200H20L0%2020M40%2040V20L20%2040%22%2F%3E%3C%2Fg%3E%3C%2Fsvg%3E')]"></div>
           <div className="absolute inset-4 border-4 border-amber-700 opacity-30 rounded pointer-events-none"></div>
 
           <div className="absolute top-6 left-6 flex gap-3 z-10">
-            {decorations.includes('torch') && <span className="text-5xl drop-shadow-2xl">🔥</span>}
-            {decorations.includes('banner') && <span className="text-5xl drop-shadow-2xl">🚩</span>}
+            {decorations.includes('torch') && <span className="text-5xl drop-shadow-2xl">ðŸ”¥</span>}
+            {decorations.includes('banner') && <span className="text-5xl drop-shadow-2xl">ðŸš©</span>}
           </div>
           <div className="absolute top-6 right-6 flex gap-3 z-10">
-            {decorations.includes('shield') && <span className="text-5xl drop-shadow-2xl">🛡️</span>}
-            {decorations.includes('armor') && <span className="text-5xl drop-shadow-2xl">⚔️</span>}
+            {decorations.includes('shield') && <span className="text-5xl drop-shadow-2xl">ðŸ›¡ï¸</span>}
+            {decorations.includes('armor') && <span className="text-5xl drop-shadow-2xl">âš”ï¸</span>}
           </div>
           <div className="absolute bottom-6 left-6 flex gap-3 z-10">
-            {decorations.includes('chest') && <span className="text-5xl drop-shadow-2xl">📦</span>}
-            {decorations.includes('bookshelf') && <span className="text-5xl drop-shadow-2xl">📚</span>}
+            {decorations.includes('chest') && <span className="text-5xl drop-shadow-2xl">ðŸ“¦</span>}
+            {decorations.includes('bookshelf') && <span className="text-5xl drop-shadow-2xl">ðŸ“š</span>}
           </div>
 
           <div className="absolute inset-0 flex items-center justify-center z-20">
             <div className="text-center">
-              <div className="text-9xl mb-6 animate-bounce drop-shadow-2xl">🐉</div>
+              <div className="text-9xl mb-6 animate-bounce drop-shadow-2xl">ðŸ‰</div>
               <div className="inline-block px-8 py-4 bg-[#fdf6e3] bg-paper-texture rounded-lg shadow-2xl border-4 border-[#8B5A2B]">
                 <h2 className="text-3xl font-bold mb-3 text-[#4a2e19]">
                   Level {pet.level} {pet.type.charAt(0).toUpperCase() + pet.type.slice(1)}
@@ -584,14 +659,14 @@ const PetChamber = ({ pet, decorations, gold, feedPet, playWithPet, buyDecoratio
                     ? 'bg-gray-300 border-gray-600 text-gray-700 cursor-not-allowed opacity-75'
                     : gold < 50
                     ? 'bg-[#d4b896] border-[#8B5A2B] text-gray-500 cursor-not-allowed opacity-60'
-                    : 'bg-gradient-to-br from-[#8B5A2B] to-[#6d4423] border-[#4a2e19] text-[#fdf6e-3] hover:from-[#6d4423] hover:to-[#5a381a]'
+                    : 'bg-gradient-to-br from-[#8B5A2B] to-[#6d4423] border-[#4a2e19] text-[#fdf6e3] hover:from-[#6d4423] hover:to-[#5a381a]'
                 }`}
               >
                 <div className="flex items-center justify-between">
                   <span className="capitalize text-lg">{deco}</span>
                   <span className="flex items-center gap-1 font-bold">
                     {decorations.includes(deco) ? (
-                      <span className="text-sm">✓ Owned</span>
+                      <span className="text-sm">âœ“ Owned</span>
                     ) : (
                       <>
                         <span>50</span>
@@ -610,3 +685,4 @@ const PetChamber = ({ pet, decorations, gold, feedPet, playWithPet, buyDecoratio
 };
 
 export default GuildQuest;
+

@@ -1,8 +1,18 @@
 
-import api from './http';
+import http from './http';
 
-export const getPet = () => api.get('/pet');
+export const getPet = async () => {
+  const res = await http.get('/pet');
+  return res.data;
+};
 
-export const feedPet = () => api.put('/pet/feed');
-export const playWithPet = () => api.put('/pet/play');
+export const feedPet = async () => {
+  const res = await http.post('/pet/feed');
+  return res.data;
+};
+
+export const playWithPet = async () => {
+  const res = await http.post('/pet/play');
+  return res.data;
+};
 

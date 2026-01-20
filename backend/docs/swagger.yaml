@@ -1,4 +1,14 @@
 definitions:
+  models.BulkTaskRequest:
+    properties:
+      tasks:
+        items:
+          $ref: '#/definitions/models.CreateTaskRequest'
+        minItems: 1
+        type: array
+    required:
+    - tasks
+    type: object
   models.BuyDecorationRequest:
     properties:
       decoration:
@@ -255,6 +265,69 @@ paths:
       security:
       - BearerAuth: []
       summary: Create task
+      tags:
+      - tasks
+  /tasks/{id}:
+    delete:
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "204":
+          description: No Content
+      security:
+      - BearerAuth: []
+      summary: Delete task
+      tags:
+      - tasks
+  /tasks/{id}/complete:
+    post:
+      parameters:
+      - description: Task ID
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Task'
+      security:
+      - BearerAuth: []
+      summary: Complete task
+      tags:
+      - tasks
+  /tasks/bulk:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Tasks
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.BulkTaskRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            items:
+              $ref: '#/definitions/models.Task'
+            type: array
+      security:
+      - BearerAuth: []
+      summary: Create bulk tasks
       tags:
       - tasks
 swagger: "2.0"
